@@ -1,104 +1,112 @@
 import sys
-from dataclasses import dataclass
 import os
-
 import numpy as np
 import pandas as pd
+from dataclasses import dataclass
 from sklearn.compose import ColumnTransformer
-from sklearn .preprocessing import StandardScaler,OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-
 
 from src.exception import CustomException
 from src.logger import logging
 from src.utils import save_object
 
-
-
 @dataclass
-class Datacleaner:
-    cleaning:str=os.path.join('artifacts','data_clean.pkl')
+class DataTransformationConfig:
+    preprocessor_obj_file_path: str = os.path.join('artifacts', 'preprocessor.pkl')
 
-class datacleaning:
+class DataTransformation:
     def __init__(self):
-        self.datacleaning=Datacleaner()
+        self.data_transformation_config = DataTransformationConfig()
 
-    def data_cleaning_build(self):
-
+    def get_data_transformer_object(self):
+        """
+        This function creates data transformation pipelines for numerical and categorical features
+        """
         try:
-            numeric_columns=["writing_score","reading_score"]
+            # Define numerical and categorical columns
+            numerical_columns = ["writing_score", "reading_score"]
+            categorical_columns = [
+                'gender', 
+                'race_ethnicity', 
+                'parental_level_of_education', 
+                'lunch', 
+                'test_preparation_course'
+            ]
 
-            categorical_columns=['gender', 'race_ethnicity', 'parental_level_of_education', 'lunch', 'test_preparation_course']
-
-            numeric_cleaning_pipeline=Pipeline([
-                ('filling_missing_values',SimpleImputer(strategy='median')),
-                ('scale_numbers',StandardScaler())
-
+            # Numerical features pipeline
+            numerical_pipeline = Pipeline([
+                ('imputer', SimpleImputer(strategy='median')),
+                ('scaler', StandardScaler())
             ])
 
-            categorical_cleaning_pipeline=Pipeline([
-                ('fill_missing_values',SimpleImputer(strategy='most_frequent')),
-                ('encoding_of_text',OneHotEncoder()),
-                ('convert_text_to_numbers',StandardScaler(with_mean=False))
-                
+            # Categorical features pipeline
+            categorical_pipeline = Pipeline([
+                ('imputer', SimpleImputer(strategy='most_frequent')),
+                ('one_hot_encoder', OneHotEncoder()),
+                ('scaler', StandardScaler(with_mean=False))
             ])
 
-            logging.info(f"numeric_columns_in cleaning{numeric_columns}")
-            logging.info(f"categorical_columns_in cleaning{categorical_columns}")
+            logging.info(f"Numerical columns: {numerical_columns}")
+            logging.info(f"Categorical columns: {categorical_columns}")
 
-
-            complete_data_cleaning_of_both=ColumnTransformer([
-                ("clean_numbers",numeric_cleaning_pipeline,numeric_columns),
-                ("clean_categorical_values",categorical_cleaning_pipeline,categorical_columns)
+            # Combine preprocessing steps
+            preprocessor = ColumnTransformer([
+                ("numerical_pipeline", numerical_pipeline, numerical_columns),
+                ("categorical_pipeline", categorical_pipeline, categorical_columns)
             ])
             
-            return complete_data_cleaning_of_both
+            return preprocessor
 
         except Exception as e:
-            raise CustomException(e,sys)
+            raise CustomException(e, sys)
 
-
-    def clean_and_prepare_data(self,train_data_path,test_data_path):
+    def initiate_data_transformation(self, train_path, test_path):
         try:
-            train_data=pd.read_csv(train_data_path)
-            test_data=pd.read_csv(test_data_path)
-            logging.info("loading data files for cleaning and transformation")
+            # Load training and testing data
+            train_df = pd.read_csv(train_path)
+            test_df = pd.read_csv(test_path)
+            logging.info("Training and testing datasets loaded successfully")
 
-            logging.info("undrgoing data cleaning ")
-            data_cleaner=self.data_cleaning_build()
+            # Get preprocessing object
+            logging.info("Obtaining preprocessing object")
+            preprocessing_obj = self.get_data_transformer_object()
 
-            target_column='math_score'
+            # Define target column
+            target_column_name = 'math_score'
 
-            x_train_df=train_data.drop(columns=[target_column],axis=1)
-            y_train_df=train_data[target_column]
+            # Separate input features and target feature for training set
+            input_feature_train_df = train_df.drop(columns=[target_column_name], axis=1)
+            target_feature_train_df = train_df[target_column_name]
 
-            x_test_df=test_data.drop(columns=[target_column],axis=1)
-            y_test_df=test_data[target_column]
+            # Separate input features and target feature for testing set
+            input_feature_test_df = test_df.drop(columns=[target_column_name], axis=1)
+            target_feature_test_df = test_df[target_column_name]
 
-            logging.info("starting to clean test and train")
+            logging.info("Applying preprocessing object on training and testing dataframes")
 
-            clean_x_train_df=data_cleaner.fit_transform(x_train_df)
-            clean_x_test_df=data_cleaner.transform(x_test_df)
- 
-            clean_training_df=np.c_[clean_x_train_df,np.array(y_train_df)]
-            clean_testing_df=np.c_[clean_x_test_df,np.array(y_test_df)]
+            # Apply transformations
+            input_feature_train_arr = preprocessing_obj.fit_transform(input_feature_train_df)
+            input_feature_test_arr = preprocessing_obj.transform(input_feature_test_df)
 
-            logging.info("saving our data for future use")
+            # Combine processed features with target variable
+            train_arr = np.c_[input_feature_train_arr, np.array(target_feature_train_df)]
+            test_arr = np.c_[input_feature_test_arr, np.array(target_feature_test_df)]
 
+            logging.info("Preprocessing object saved successfully")
 
+            # Save preprocessing object
             save_object(
-                file_path=self.datacleaning.cleaning,obj=data_cleaner
+                file_path=self.data_transformation_config.preprocessor_obj_file_path,
+                obj=preprocessing_obj
             )
 
-
-            return(
-                clean_training_df,
-                clean_testing_df,
-                self.datacleaning.cleaning
+            return (
+                train_arr,
+                test_arr,
+                self.data_transformation_config.preprocessor_obj_file_path,
             )
+            
         except Exception as e:
-            raise CustomException(e,sys)
-
-
-
+            raise CustomException(e, sys)

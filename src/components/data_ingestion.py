@@ -1,58 +1,46 @@
 import os
 import sys
-from src.exception import CustomException
-from src.logger import logging
-from src.components.data_transformation import Datacleaner
-from src.components.data_transformation import datacleaning
 import pandas as pd
-
 from sklearn.model_selection import train_test_split
 from dataclasses import dataclass
 
+from src.exception import CustomException
+from src.logger import logging
 
 @dataclass
-class FilePathManager:
-    train_data_path: str =os.path.join('artifacts','train.csv')
-    test_data_path: str =os.path.join('artifacts','test.csv')
-    raw_data_path: str =os.path.join('artifacts','raw.csv')
+class DataIngestionConfig:
+    train_data_path: str = os.path.join('artifacts', 'train.csv')
+    test_data_path: str = os.path.join('artifacts', 'test.csv')
+    raw_data_path: str = os.path.join('artifacts', 'raw.csv')
 
-class DataPreparation:
+class DataIngestion:
     def __init__(self):
-        self.file_paths=FilePathManager()
+        self.ingestion_config = DataIngestionConfig()
 
-    def prepare_and_split_data(self):
-        logging.info("data ingestion started")
+    def initiate_data_ingestion(self):
+        logging.info("Data ingestion process started")
         try:
-            df=pd.read_csv('notebook\data\stud.csv')
-            logging.info("data successfully loaded")
+            # Load the original dataset
+            df = pd.read_csv('notebook\\data\\stud.csv')
+            logging.info("Dataset successfully loaded into DataFrame")
 
-            os.makedirs(os.path.dirname(self.file_paths.train_data_path),exist_ok=True)
+            # Create artifacts directory
+            os.makedirs(os.path.dirname(self.ingestion_config.train_data_path), exist_ok=True)
 
-            df.to_csv(self.file_paths.raw_data_path,index=False,header=True)
-            logging.info("saved the original data")
+            # Save original data as backup
+            df.to_csv(self.ingestion_config.raw_data_path, index=False, header=True)
+            logging.info("Original data saved as backup")
 
+            # Split the data into training and testing sets
+            logging.info("Initiating train-test split")
+            train_set, test_set = train_test_split(df, test_size=0.2, random_state=42)
 
-            logging.info("train,test split starteed")
+            # Save split datasets
+            train_set.to_csv(self.ingestion_config.train_data_path, index=False, header=True)
+            test_set.to_csv(self.ingestion_config.test_data_path, index=False, header=True)
 
-            train_set,test_set=train_test_split(df,test_size=0.2,random_state=42)
-
-            train_set.to_csv(self.file_paths.train_data_path,index=False,header=True)
-
-            test_set.to_csv(self.file_paths.test_data_path,index=False,header=True)
-
-            logging.info("splitting completed")
-
-            return(self.file_paths.train_data_path,self.file_paths.test_data_path)
+            logging.info("Data ingestion completed successfully")
+            return (self.ingestion_config.train_data_path, self.ingestion_config.test_data_path)
 
         except Exception as e:
-            raise CustomException(e,sys)
-        
-if __name__=="__main__":
-    print("step 1:preparation of data")
-    data_preparation=DataPreparation()
-    train_data_path,test_data_path = data_preparation.prepare_and_split_data()
-    print(f"train_date_here:{train_data_path}")
-    print(f"test_date_here:{test_data_path}")
-
-    data_transformation=datacleaning()
-    clean_training_df,clean_testing_df,_= data_transformation.clean_and_prepare_data(train_data_path,test_data_path)
+            raise CustomException(e, sys)
