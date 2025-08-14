@@ -51,10 +51,10 @@ flowchart TD
     end
 
     %% MAIN DATA FLOW (user to response)
-    FE1 -->|POST Student Data (JSON)| BE1
-    BE1 -->|Load Model & Preprocessor| ML3
-    ML3 -->|Preprocess & Predict| BE1
-    BE1 -->|Prediction Result (JSON)| FE1
+    FE1 --> BE1
+    BE1 --> ML3
+    ML3 --> BE1
+    BE1 --> FE1
 
     %% ML PIPELINE DATA CONNECTIVITY
     ML1 --> ML2
@@ -75,14 +75,12 @@ flowchart TD
     classDef ml fill:#FFF3E0,stroke:#FB8C00,stroke-width:2px,color:#E65100
     classDef infra fill:#F3E5F5,stroke:#8E24AA,stroke-width:2px,color:#4A148C
     classDef storage fill:#ECEFF1,stroke:#607D8B,stroke-width:2px,color:#263238
-    classDef dataflow stroke-dasharray:5 5
 
     class FE1 frontend
     class BE1,BE2 backend
     class ML1,ML2 ml
     class ML3 storage
     class CI1,CI2,CI3 infra
-    class FE1,BE1,ML3 dataflow
 ```
 
 ## 🧠 Machine Learning Pipeline
