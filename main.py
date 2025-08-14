@@ -1,12 +1,11 @@
-from fastapi import FastAPI, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 import numpy as np
 import pandas as pd
 import logging
+import os
 from typing import Dict, Any, Optional
 import uvicorn
 
@@ -52,74 +51,23 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+# Add CORS middleware for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict this to your frontend domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-@app.get("/predictdata", response_class=HTMLResponse)
-async def predict_form(request: Request):
-    return templates.TemplateResponse("home.html", {"request": request})
-
-@app.post("/predictdata", response_class=HTMLResponse)
-async def predict_datapoint_form(
-    request: Request,
-    gender: str = Form(...),
-    ethnicity: str = Form(...),
-    parental_level_of_education: str = Form(...),
-    lunch: str = Form(...),
-    test_preparation_course: str = Form(...),
-    reading_score: float = Form(...),
-    writing_score: float = Form(...)
-):
-    try:
-        data = CustomData(
-            gender=gender,
-            race_ethnicity=ethnicity,
-            parental_level_of_education=parental_level_of_education,
-            lunch=lunch,
-            test_preparation_course=test_preparation_course,
-            reading_score=reading_score,
-            writing_score=writing_score
-        )
-        
-        pred_df = data.get_data_as_data_frame()
-        logger.info(f"Input data: {pred_df.to_dict('records')[0]}")
-        
-        results = prediction_pipeline.predict(pred_df)
-        predicted_score = float(results[0])
-        
-        logger.info(f"Prediction: {predicted_score}")
-        
-        return templates.TemplateResponse(
-            "home.html", 
-            {
-                "request": request, 
-                "results": round(predicted_score, 2),
-                "input_data": {
-                    "name": f"{gender.title()} Student",
-                    "gender": gender,
-                    "ethnicity": ethnicity,
-                    "education": parental_level_of_education,
-                    "lunch": lunch,
-                    "test_prep": test_preparation_course,
-                    "reading": reading_score,
-                    "writing": writing_score
-                }
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Form prediction failed: {str(e)}")
-        return templates.TemplateResponse(
-            "home.html", 
-            {
-                "request": request, 
-                "error": f"Prediction failed: {str(e)}"
-            }
-        )
+@app.get("/")
+async def root():
+    return {
+        "message": "Student Performance Predictor API",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
 
 @app.post("/api/predict", response_model=PredictionResponse)
 async def predict_api(student_data: StudentInput):
@@ -171,9 +119,9 @@ async def health_check():
             "message": "Student Performance Predictor API is running",
             "version": "2.0.0",
             "endpoints": {
-                "web_interface": "/predictdata",
                 "api_endpoint": "/api/predict",
-                "documentation": "/docs"
+                "documentation": "/docs",
+                "health": "/health"
             }
         }
     except Exception as e:
@@ -210,19 +158,12 @@ async def test_endpoint():
         "status": "success"
     }
 
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc: HTTPException):
-    return templates.TemplateResponse(
-        "404.html", 
-        {"request": request}, 
-        status_code=404
-    )
-
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main:app", 
         host="0.0.0.0", 
-        port=8000, 
-        reload=True,
+        port=port, 
+        reload=False,  # Set to False for production
         log_level="info"
     )
