@@ -178,15 +178,9 @@ __marimo__/
 # PROJECT-SPECIFIC IGNORE PATTERNS
 # =============================================================================
 
-# ML Model Artifacts (Large files, can be regenerated)
-artifacts/
-*.pkl
-*.joblib
-*.h5
-*.hdf5
-*.pb
-*.onnx
-*.tflite
+# ML Model Artifacts (Keep important model files for deployment!)
+# artifacts/  # Allow artifacts directory
+# *.pkl       # Allow .pkl files
 
 # Training Logs and Metrics
 logs/

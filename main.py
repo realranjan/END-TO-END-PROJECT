@@ -67,7 +67,7 @@ async def root():
         "version": "2.0.0",
         "docs": "/docs",
         "health": "/health"
-    }
+            }
 
 @app.post("/api/predict", response_model=PredictionResponse)
 async def predict_api(student_data: StudentInput):
