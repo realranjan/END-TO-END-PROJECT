@@ -4,6 +4,7 @@ import pandas as pd
 from src.exception import CustomException
 from src.utils import load_object
 
+
 class PredictPipeline:
     def __init__(self):
         pass
@@ -11,35 +12,42 @@ class PredictPipeline:
     def predict(self, features):
         try:
             # Get the absolute path to the project root directory
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            
+            project_root = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+
             model_path = os.path.join(project_root, "artifacts", "model.pkl")
-            preprocessor_path = os.path.join(project_root, 'artifacts', 'preprocessor.pkl')
-            
+            preprocessor_path = os.path.join(
+                project_root, "artifacts", "preprocessor.pkl"
+            )
+
             print(f"Loading model from: {model_path}")
             print(f"Loading preprocessor from: {preprocessor_path}")
-            
+
             model = load_object(file_path=model_path)
             preprocessor = load_object(file_path=preprocessor_path)
-            
+
             print("Model and preprocessor loaded successfully")
-            
+
             data_scaled = preprocessor.transform(features)
             preds = model.predict(data_scaled)
             return preds
-        
+
         except Exception as e:
             raise CustomException(e, sys)
 
+
 class CustomData:
-    def __init__(self,
+    def __init__(
+        self,
         gender: str,
         race_ethnicity: str,
         parental_level_of_education: str,
         lunch: str,
         test_preparation_course: str,
         reading_score: int,
-        writing_score: int):
+        writing_score: int,
+    ):
 
         self.gender = gender
         self.race_ethnicity = race_ethnicity

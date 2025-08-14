@@ -13,3 +13,4 @@ python-multipart
 gunicorn
 psycopg2-binary
 python-dotenv
+black
