@@ -1,0 +1,138 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install black flake8 pytest
+    
+    - name: Run code formatting check
+      run: |
+        black --check src/
+    
+    - name: Run linting
+      run: |
+        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+    
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/student-predictor:latest
+          ${{ secrets.DOCKER_USERNAME }}/student-predictor:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy-backend:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Deploy to Render
+      run: |
+        # Install jq for JSON parsing
+        sudo apt-get update && sudo apt-get install -y jq
+        
+        # Verify service exists
+        echo "Verifying Render service exists..."
+        SERVICE_RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}")
+        
+        if echo "$SERVICE_RESPONSE" | jq -e '.id' > /dev/null; then
+          echo "✅ Service found: $(echo "$SERVICE_RESPONSE" | jq -r '.name')"
+        else
+          echo "❌ Service not found or API error"
+          echo "Response: $SERVICE_RESPONSE"
+          exit 1
+        fi
+        
+        # Trigger deployment
+        echo "Triggering Render deployment..."
+        DEPLOY_RESPONSE=$(curl -s -X POST \
+          -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys")
+        
+        if echo "$DEPLOY_RESPONSE" | jq -e '.id' > /dev/null; then
+          DEPLOY_ID=$(echo "$DEPLOY_RESPONSE" | jq -r '.id')
+          echo "✅ Deployment triggered successfully! Deploy ID: $DEPLOY_ID"
+          
+          # Wait for deployment to complete
+          echo "Waiting for deployment to complete..."
+          for i in {1..30}; do
+            sleep 10
+            STATUS_RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$DEPLOY_ID")
+            
+            STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status')
+            echo "Deployment status: $STATUS"
+            
+            if [ "$STATUS" = "live" ]; then
+              echo "✅ Deployment completed successfully!"
+              break
+            elif [ "$STATUS" = "failed" ]; then
+              echo "❌ Deployment failed!"
+              echo "Status response: $STATUS_RESPONSE"
+              exit 1
+            fi
+          done
+        else
+          echo "❌ Failed to trigger deployment"
+          echo "Response: $DEPLOY_RESPONSE"
+          exit 1
+        fi
+
+  deploy-frontend:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to Vercel
+      uses: amondnet/vercel-action@v25
+      with:
+        vercel-token: ${{ secrets.VERCEL_TOKEN }}
+        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+        working-directory: ./frontend 
