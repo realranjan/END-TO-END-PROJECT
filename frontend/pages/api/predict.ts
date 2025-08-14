@@ -12,6 +12,9 @@ export default async function handler(
     // Use the actual backend URL directly
     const backendUrl = 'https://student-predictor-backend.onrender.com'
     
+    console.log('Sending request to backend:', `${backendUrl}/api/predict`)
+    console.log('Request body:', req.body)
+    
     const response = await fetch(`${backendUrl}/api/predict`, {
       method: 'POST',
       headers: {
@@ -20,11 +23,16 @@ export default async function handler(
       body: JSON.stringify(req.body),
     })
 
+    console.log('Backend response status:', response.status)
+
     if (!response.ok) {
-      throw new Error(`Backend error: ${response.status}`)
+      const errorText = await response.text()
+      console.error('Backend error response:', errorText)
+      throw new Error(`Backend error: ${response.status} - ${errorText}`)
     }
 
     const data = await response.json()
+    console.log('Backend response data:', data)
     res.status(200).json(data)
   } catch (error) {
     console.error('API Error:', error)
