@@ -99,12 +99,50 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
+    - name: Install jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+      
     - name: Deploy to Render
-      uses: johnbeynon/render-deploy-action@v1.0.0
-      with:
-        service-id: ${{ secrets.RENDER_SERVICE_ID }}
-        api-key: ${{ secrets.RENDER_API_KEY }}
-        wait-for-success: true
+      run: |
+        # Trigger Render deployment via API
+        curl -X POST \
+          -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys"
+        
+        echo "Render deployment triggered successfully!"
+        
+        # Wait a bit for deployment to start
+        sleep 10
+        
+        # Check deployment status
+        echo "Checking deployment status..."
+        DEPLOY_STATUS=$(curl -s \
+          -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" | \
+          jq -r '.deploys[0].status')
+        
+        echo "Current deployment status: $DEPLOY_STATUS"
+        
+        # Wait for deployment to complete (with timeout)
+        TIMEOUT=300  # 5 minutes
+        ELAPSED=0
+        while [ "$DEPLOY_STATUS" != "live" ] && [ $ELAPSED -lt $TIMEOUT ]; do
+          sleep 30
+          ELAPSED=$((ELAPSED + 30))
+          DEPLOY_STATUS=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" | \
+            jq -r '.deploys[0].status')
+          echo "Deployment status: $DEPLOY_STATUS (elapsed: ${ELAPSED}s)"
+        done
+        
+        if [ "$DEPLOY_STATUS" = "live" ]; then
+          echo "✅ Render deployment completed successfully!"
+        else
+          echo "⚠️ Deployment may still be in progress or failed"
+          exit 1
+        fi
 
   deploy-frontend:
     name: Deploy Frontend to Vercel
