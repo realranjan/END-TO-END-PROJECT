@@ -9,7 +9,8 @@ export default async function handler(
   }
 
   try {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    // Use the actual backend URL directly
+    const backendUrl = 'https://student-predictor-backend.onrender.com'
     
     const response = await fetch(`${backendUrl}/api/predict`, {
       method: 'POST',
